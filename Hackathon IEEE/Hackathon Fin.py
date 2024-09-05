@@ -4,6 +4,7 @@ import speech_recognition as sr
 from pydub import AudioSegment
 import os
 import threading
+from PIL import Image, ImageTk
 
 def browse_file():
     # Open file dialog and allow the user to select an audio file
@@ -91,11 +92,17 @@ def export_text():
 # Create GUI window
 root = tk.Tk()
 root.title("Audio Transcription")
-root.geometry("400x400")  # Set window size
+root.geometry("400x500")  # Adjusted height for the logo
 root.resizable(False, False)
 
 selected_file = None
 transcribed_text = None
+
+# Set the window icon to the logo
+logo_image = Image.open("logo.png")  # Replace with your logo file
+logo_image = logo_image.resize((100, 100), Image.Resampling.LANCZOS)  # Resize logo if necessary
+logo_photo = ImageTk.PhotoImage(logo_image)
+root.iconphoto(False, logo_photo)
 
 # Add a file browsing button
 browse_button = tk.Button(root, text="Browse Audio File", command=browse_file, bg="#4CAF50", fg="white", font=("Arial", 12), width=20)
