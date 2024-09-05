@@ -5,6 +5,7 @@ from pydub import AudioSegment
 import os
 import threading
 from PIL import Image, ImageTk
+import math
 
 def browse_file():
     # Open file dialog and allow the user to select an audio file
@@ -28,31 +29,51 @@ def transcribe_audio(filepath):
         audio.export(temp_wav_file, format="wav")
         filepath = temp_wav_file
 
-    # Initialize recognizer
+    # Load audio file and split into chunks
+    audio = AudioSegment.from_wav(filepath)
+    chunk_length_ms = 60000  # 60 seconds per chunk
+    chunks = [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
+
     recognizer = sr.Recognizer()
+    full_transcription = []
 
-    # Load the WAV file
-    with sr.AudioFile(filepath) as source:
-        audio = recognizer.record(source)
+    for i, chunk in enumerate(chunks):
+        chunk_filename = f"chunk{i}.wav"
+        chunk.export(chunk_filename, format="wav")
 
-    # Recognize speech using Google Web Speech API
-    try:
-        text = recognizer.recognize_google(audio)
-        result_label.config(text=f"Transcribed Text: {text}")
-        global transcribed_text
-        transcribed_text = text  # Store transcribed text
-        export_button.config(state=tk.NORMAL)  # Enable export button
-    except sr.UnknownValueError:
-        result_label.config(text="Google Web Speech API could not understand the audio")
-    except sr.RequestError as e:
-        result_label.config(text=f"Could not request results from Google Web Speech API; {e}")
+        with sr.AudioFile(chunk_filename) as source:
+            audio_data = recognizer.record(source)
+
+        try:
+            text = recognizer.recognize_google(audio_data)
+            full_transcription.append(text)
+            result_label.config(text=f"Transcribing chunk {i+1}/{len(chunks)}")
+        except sr.UnknownValueError:
+            full_transcription.append("[Unintelligible]")
+        except sr.RequestError as e:
+            full_transcription.append(f"[Error: {e}]")
+        
+        # Remove chunk file after use
+        os.remove(chunk_filename)
+
+    transcribed_text = ' '.join(full_transcription)
     
+    # Check if the transcribed text has more than 20 words
+    if len(transcribed_text.split()) > 20:
+        result_label.config(text="Transcription complete. Text is too long to display.\n Export text in order to view it")
+    else:
+        result_label.config(text=f"Transcribed Text: {transcribed_text}")
+
     # Remove the temporary wav file after transcription
     if temp_wav_file and os.path.exists(temp_wav_file):
         os.remove(temp_wav_file)
-    
+
     # Hide loading screen
     hide_loading()
+
+    global final_transcription
+    final_transcription = transcribed_text  # Store transcribed text globally
+    export_button.config(state=tk.NORMAL)  # Enable export button
 
 def start_transcription():
     if selected_file:
@@ -75,7 +96,7 @@ def hide_loading():
     root.update_idletasks()
 
 def export_text():
-    if transcribed_text:
+    if final_transcription:
         # Get the directory of the input file
         file_dir = os.path.dirname(selected_file)
         file_name = os.path.splitext(os.path.basename(selected_file))[0]
@@ -83,7 +104,7 @@ def export_text():
         
         # Save the transcribed text to a .txt file
         with open(export_path, "w") as f:
-            f.write(transcribed_text)
+            f.write(final_transcription)
         
         messagebox.showinfo("Success", f"Text exported successfully to {export_path}")
     else:
@@ -96,7 +117,7 @@ root.geometry("400x500")  # Adjusted height for the logo
 root.resizable(False, False)
 
 selected_file = None
-transcribed_text = None
+final_transcription = None
 
 # Set the window icon to the logo
 logo_image = Image.open("logo.png")  # Replace with your logo file
