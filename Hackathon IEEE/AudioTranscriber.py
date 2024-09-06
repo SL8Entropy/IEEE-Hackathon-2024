@@ -6,9 +6,13 @@ import os
 import threading
 from PIL import Image, ImageTk
 from transformers import pipeline
-import time  # For simulating progress during grammar correction
+import time
 import torch
 import math
+
+# Global variables
+selected_file = None
+final_corrected_text = None
 
 def browse_file():
     filepath = filedialog.askopenfilename(
@@ -68,7 +72,6 @@ def transcribe_and_correct(filepath):
     progress_bar['value'] = 0
     progress_label.config(text="Correcting grammar...")
 
-    # Simulate model loading and grammar correction
     correct_grammar(transcribed_text)
 
     if temp_wav_file and os.path.exists(temp_wav_file):
@@ -76,37 +79,50 @@ def transcribe_and_correct(filepath):
 
     hide_loading()
 
+
 def correct_grammar(text):
-    # Simulate the grammar correction process
+    global final_corrected_text
+    # Start a new thread for grammar correction
+    threading.Thread(target=lambda: grammar_correction_task(text)).start()
+
+def grammar_correction_task(text):
     global final_corrected_text
 
-    # Check if GPU is available and set device accordingly
     device = 0 if torch.cuda.is_available() else -1  # Use GPU if available, otherwise CPU
+    grammar_corrector = pipeline("text2text-generation", model="facebook/bart-large", device=device)
 
-    # Load the grammar correction pipeline
-    grammar_corrector = pipeline("text2text-generation", model="t5-base", device=device)
-
-    # Simulate progress bar for model loading
-    for i in range(101):  # Simulate 0% to 100%
-        time.sleep(0.05)  # Slow down the simulation (adjust as needed)
-        progress_bar['value'] = i
-        progress_label.config(text=f"Grammar correction in progress: {i}%")
-        root.update_idletasks()
+    # Simulate progress bar for grammar correction
+    total_steps = 100
+    for i in range(total_steps + 1):
+        time.sleep(0.05)  # Simulate time delay for progress
+        root.after(0, update_ui_progress, i)  # Update progress safely from the main thread
 
     # Perform grammar correction
     corrected = grammar_corrector(f"fix grammar: {text}", max_length=len(text), do_sample=False)
     final_corrected_text = corrected[0]['generated_text']
-    result_label.config(text=f"Corrected Text: {final_corrected_text}")
+
+    # Display the corrected text
+    root.after(0, display_corrected_text)  # Safely update UI from main thread
+
+def update_ui_progress(i):
+    progress_bar['value'] = i
+    progress_label.config(text=f"Grammar correction in progress: {i}%")
+    root.update_idletasks()
+
+def display_corrected_text():
+    if len(final_corrected_text.split()) <= 20:
+        result_label.config(text=f"Corrected Text: {final_corrected_text}")
+    else:
+        result_label.config(text="Corrected text is too long to display.")
     export_button.config(state=tk.NORMAL)
 
-ddef start_transcription_and_correction():
+def start_transcription_and_correction():
     if selected_file:
         convert_button.config(state=tk.DISABLED)  # Disable the button during processing
         show_loading()
         threading.Thread(target=lambda: transcribe_and_correct(selected_file)).start()
     else:
         messagebox.showerror("Error", "Please select an audio file first.")
-
 
 def show_loading():
     loading_label.pack(pady=10)
@@ -148,7 +164,6 @@ def reset_program():
     convert_button.config(state=tk.DISABLED)
     export_button.config(state=tk.DISABLED)
     
-    # Clear the selected file and final corrected text
     global selected_file, final_corrected_text
     selected_file = None
     final_corrected_text = None
@@ -159,14 +174,14 @@ root.title("Audio Transcription with Grammar Correction")
 root.geometry("400x600")
 root.resizable(False, False)
 
-selected_file = None
-final_corrected_text = None
-
 # Load and resize logo image (if available)
-logo_image = Image.open("logo.png")
-logo_image = logo_image.resize((100, 100), Image.Resampling.LANCZOS)
-logo_photo = ImageTk.PhotoImage(logo_image)
-root.iconphoto(False, logo_photo)
+try:
+    logo_image = Image.open("logo.png")
+    logo_image = logo_image.resize((100, 100), Image.Resampling.LANCZOS)
+    logo_photo = ImageTk.PhotoImage(logo_image)
+    root.iconphoto(False, logo_photo)
+except FileNotFoundError:
+    print("Logo image not found, skipping logo setup.")
 
 browse_button = tk.Button(root, text="Browse Audio File", command=browse_file, bg="#4CAF50", fg="white", font=("Arial", 12), width=20)
 browse_button.pack(pady=20)
@@ -189,7 +204,6 @@ export_button = tk.Button(root, text="Export Corrected Text", command=export_tex
 export_button.pack(pady=20)
 export_button.config(state=tk.DISABLED)
 
-# Add the reset button to the GUI
 reset_button = tk.Button(root, text="Reset Program", command=reset_program, bg="#F44336", fg="white", font=("Arial", 12), width=20)
 reset_button.pack(pady=20)
 
