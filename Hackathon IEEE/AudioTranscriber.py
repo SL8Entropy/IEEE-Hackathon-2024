@@ -5,33 +5,33 @@ from pydub import AudioSegment
 import os
 import threading
 from PIL import Image, ImageTk
+from transformers import pipeline
+import time  # For simulating progress during grammar correction
+import torch
 import math
 
 def browse_file():
-    # Open file dialog and allow the user to select an audio file
     filepath = filedialog.askopenfilename(
         title="Select an Audio File", 
         filetypes=[("Audio Files", "*.mp3 *.wav *.flac *.ogg *.m4a *.aac")]
     )
     if filepath:
         file_label.config(text=f"Selected File: {os.path.basename(filepath)}")
-        convert_button.config(state=tk.NORMAL)  # Enable the convert button
+        convert_button.config(state=tk.NORMAL)
         global selected_file
         selected_file = filepath
 
-def transcribe_audio(filepath):
-    temp_wav_file = None  # To track if we created a temp wav file
-
-    # Convert audio to wav if it's not in wav format
+def transcribe_and_correct(filepath):
+    temp_wav_file = None
+    # Convert to wav if needed
     if not filepath.endswith(".wav"):
         audio = AudioSegment.from_file(filepath)
         temp_wav_file = "converted_audio.wav"
         audio.export(temp_wav_file, format="wav")
         filepath = temp_wav_file
 
-    # Load audio file and split into chunks
     audio = AudioSegment.from_wav(filepath)
-    chunk_length_ms = 60000  # 60 seconds per chunk
+    chunk_length_ms = 60000
     chunks = [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
 
     recognizer = sr.Recognizer()
@@ -47,109 +47,150 @@ def transcribe_audio(filepath):
         try:
             text = recognizer.recognize_google(audio_data)
             full_transcription.append(text)
+            update_progress(i + 1, len(chunks), "Transcribing")  # Update the progress bar
             result_label.config(text=f"Transcribing chunk {i+1}/{len(chunks)}")
         except sr.UnknownValueError:
             full_transcription.append("[Unintelligible]")
         except sr.RequestError as e:
             full_transcription.append(f"[Error: {e}]")
         
-        # Remove chunk file after use
         os.remove(chunk_filename)
 
     transcribed_text = ' '.join(full_transcription)
-    
-    # Check if the transcribed text has more than 20 words
-    if len(transcribed_text.split()) > 20:
-        result_label.config(text="Transcription complete. Text is too long to display.\n Export text in order to view it")
-    else:
-        result_label.config(text=f"Transcribed Text: {transcribed_text}")
 
-    # Remove the temporary wav file after transcription
+    # If the transcribed text is fewer than 20 words, display it, otherwise hide it.
+    if len(transcribed_text.split()) <= 20:
+        result_label.config(text=f"Transcribed Text: {transcribed_text}")
+    else:
+        result_label.config(text="Transcribed text is too long to display.")
+    
+    # Reset progress bar and prepare for grammar correction
+    progress_bar['value'] = 0
+    progress_label.config(text="Correcting grammar...")
+
+    # Simulate model loading and grammar correction
+    correct_grammar(transcribed_text)
+
     if temp_wav_file and os.path.exists(temp_wav_file):
         os.remove(temp_wav_file)
 
-    # Hide loading screen
     hide_loading()
 
-    global final_transcription
-    final_transcription = transcribed_text  # Store transcribed text globally
-    export_button.config(state=tk.NORMAL)  # Enable export button
+def correct_grammar(text):
+    # Simulate the grammar correction process
+    global final_corrected_text
 
-def start_transcription():
+    # Check if GPU is available and set device accordingly
+    device = 0 if torch.cuda.is_available() else -1  # Use GPU if available, otherwise CPU
+
+    # Load the grammar correction pipeline
+    grammar_corrector = pipeline("text2text-generation", model="t5-base", device=device)
+
+    # Simulate progress bar for model loading
+    for i in range(101):  # Simulate 0% to 100%
+        time.sleep(0.05)  # Slow down the simulation (adjust as needed)
+        progress_bar['value'] = i
+        progress_label.config(text=f"Grammar correction in progress: {i}%")
+        root.update_idletasks()
+
+    # Perform grammar correction
+    corrected = grammar_corrector(f"fix grammar: {text}", max_length=len(text), do_sample=False)
+    final_corrected_text = corrected[0]['generated_text']
+    result_label.config(text=f"Corrected Text: {final_corrected_text}")
+    export_button.config(state=tk.NORMAL)
+
+ddef start_transcription_and_correction():
     if selected_file:
-        show_loading()  # Show loading screen
-        # Run transcription in a separate thread to avoid freezing the GUI
-        threading.Thread(target=lambda: transcribe_audio(selected_file)).start()
+        convert_button.config(state=tk.DISABLED)  # Disable the button during processing
+        show_loading()
+        threading.Thread(target=lambda: transcribe_and_correct(selected_file)).start()
     else:
         messagebox.showerror("Error", "Please select an audio file first.")
 
+
 def show_loading():
-    # Show loading screen
     loading_label.pack(pady=10)
     progress_bar.pack(pady=10)
-    root.update_idletasks()  # Update GUI to reflect changes
+    progress_label.pack(pady=5)
+    root.update_idletasks()
 
 def hide_loading():
-    # Hide loading screen
     loading_label.pack_forget()
     progress_bar.pack_forget()
+    progress_label.pack_forget()
+    root.update_idletasks()
+
+def update_progress(chunk_number, total_chunks, phase):
+    progress_value = (chunk_number / total_chunks) * 100
+    progress_bar['value'] = progress_value
+    progress_label.config(text=f"{phase}... {int(progress_value)}%")
     root.update_idletasks()
 
 def export_text():
-    if final_transcription:
-        # Get the directory of the input file
+    if final_corrected_text:
         file_dir = os.path.dirname(selected_file)
         file_name = os.path.splitext(os.path.basename(selected_file))[0]
-        export_path = os.path.join(file_dir, f"{file_name}_transcription.txt")
+        export_path = os.path.join(file_dir, f"{file_name}_corrected.txt")
         
-        # Save the transcribed text to a .txt file
         with open(export_path, "w") as f:
-            f.write(final_transcription)
+            f.write(final_corrected_text)
         
-        messagebox.showinfo("Success", f"Text exported successfully to {export_path}")
+        messagebox.showinfo("Success", f"Corrected text exported successfully to {export_path}")
     else:
-        messagebox.showerror("Error", "No transcription available to export.")
+        messagebox.showerror("Error", "No corrected text available to export.")
+
+def reset_program():
+    # Reset all UI elements and global variables
+    file_label.config(text="No file selected")
+    result_label.config(text="")
+    progress_label.config(text="")
+    progress_bar['value'] = 0
+    convert_button.config(state=tk.DISABLED)
+    export_button.config(state=tk.DISABLED)
+    
+    # Clear the selected file and final corrected text
+    global selected_file, final_corrected_text
+    selected_file = None
+    final_corrected_text = None
 
 # Create GUI window
 root = tk.Tk()
-root.title("Audio Transcription")
-root.geometry("400x500")  # Adjusted height for the logo
+root.title("Audio Transcription with Grammar Correction")
+root.geometry("400x600")
 root.resizable(False, False)
 
 selected_file = None
-final_transcription = None
+final_corrected_text = None
 
-# Set the window icon to the logo
-logo_image = Image.open("logo.png")  # Replace with your logo file
-logo_image = logo_image.resize((100, 100), Image.Resampling.LANCZOS)  # Resize logo if necessary
+# Load and resize logo image (if available)
+logo_image = Image.open("logo.png")
+logo_image = logo_image.resize((100, 100), Image.Resampling.LANCZOS)
 logo_photo = ImageTk.PhotoImage(logo_image)
 root.iconphoto(False, logo_photo)
 
-# Add a file browsing button
 browse_button = tk.Button(root, text="Browse Audio File", command=browse_file, bg="#4CAF50", fg="white", font=("Arial", 12), width=20)
 browse_button.pack(pady=20)
 
-# Label to show selected file
 file_label = tk.Label(root, text="No file selected", font=("Arial", 10), fg="blue")
 file_label.pack(pady=5)
 
-# Add a convert button (disabled by default)
-convert_button = tk.Button(root, text="Convert and Transcribe", command=start_transcription, bg="#2196F3", fg="white", font=("Arial", 12), width=20)
+convert_button = tk.Button(root, text="Transcribe and Correct", command=start_transcription_and_correction, bg="#2196F3", fg="white", font=("Arial", 12), width=20)
 convert_button.pack(pady=20)
-convert_button.config(state=tk.DISABLED)  # Initially disabled
+convert_button.config(state=tk.DISABLED)
 
-# Loading screen elements (hidden by default)
-loading_label = tk.Label(root, text="Transcribing, please wait...", font=("Arial", 10), fg="orange")
-progress_bar = ttk.Progressbar(root, mode="indeterminate")
+loading_label = tk.Label(root, text="Processing, please wait...", font=("Arial", 10), fg="orange")
+progress_bar = ttk.Progressbar(root, mode="determinate", length=300)
+progress_label = tk.Label(root, text="")  # Label for showing detailed progress
 
-# Label to display transcription result
 result_label = tk.Label(root, text="", wraplength=350, font=("Arial", 10), fg="green")
 result_label.pack(pady=20)
 
-# Add export button (disabled by default)
-export_button = tk.Button(root, text="Export Transcribed Text", command=export_text, bg="#FF5722", fg="white", font=("Arial", 12), width=20)
+export_button = tk.Button(root, text="Export Corrected Text", command=export_text, bg="#FF5722", fg="white", font=("Arial", 12), width=20)
 export_button.pack(pady=20)
-export_button.config(state=tk.DISABLED)  # Initially disabled
+export_button.config(state=tk.DISABLED)
 
-# Start the GUI main loop
+# Add the reset button to the GUI
+reset_button = tk.Button(root, text="Reset Program", command=reset_program, bg="#F44336", fg="white", font=("Arial", 12), width=20)
+reset_button.pack(pady=20)
+
 root.mainloop()
