@@ -5,6 +5,7 @@ import whisper
 import os
 import threading
 import torch
+from pydub import AudioSegment  # Import AudioSegment
 
 # Global variables
 selected_file = None
@@ -77,7 +78,7 @@ def grammar_correction_task(text):
 
     # Simulate progress for grammar correction
     update_status("Correcting grammar...")
-    prompt = f"Correct the grammar and fix corrupted the text. It is a highly corrupted college lecture transcription: {text}"
+    prompt = f"Correct the grammar and fix the text. It is a college lecture transcription: {text}"
     corrected = grammar_corrector(prompt, max_length=len(text) + 50, do_sample=False)
 
     final_corrected_text = corrected[0]['generated_text']
