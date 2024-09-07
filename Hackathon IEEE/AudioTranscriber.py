@@ -78,8 +78,8 @@ def grammar_correction_task(text):
 
     # Simulate progress for grammar correction
     update_status("Correcting grammar...")
-    prompt = f"Correct the grammar and fix the text. It is a college lecture transcription: {text}"
-    corrected = grammar_corrector(prompt, max_length=len(text) + 50, do_sample=False)
+    prompt = f"Correct the grammar: {text}"
+    corrected = grammar_corrector(prompt, max_length=len(text) + 50, min_length = len(text)-10, do_sample=False)
 
     final_corrected_text = corrected[0]['generated_text']
     
