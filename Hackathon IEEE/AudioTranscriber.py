@@ -6,10 +6,10 @@ import os
 import threading
 import torch
 from pydub import AudioSegment
-from transformers import pipeline  # Import pipeline
+
 # Global variables
 selected_file = None
-final_corrected_text = None
+transcribed_text = None  # Updated to hold the transcribed text
 
 # GUI functions
 def browse_file():
@@ -55,77 +55,37 @@ def transcribe_audio(filepath):
     else:
         transcribed_text_label.config(text="Transcribed text is too long to display.")
     print(transcribed_text)
-    update_status("Transcription complete. Correcting grammar...")
+    update_status("Transcription complete.")
     
-    # Reset progress bar for grammar correction
-    progress_bar['value'] = 0
-    root.update_idletasks()
-
-    correct_grammar(transcribed_text)
+    # Enable reset button once transcription is complete
+    reset_button.config(state=tk.NORMAL)
 
     if temp_wav_file and os.path.exists(temp_wav_file):
         os.remove(temp_wav_file)
 
-def correct_grammar(text):
-    # Start a new thread for grammar correction
-    threading.Thread(target=lambda: grammar_correction_task(text)).start()
-
-def grammar_correction_task(text):
-    global final_corrected_text
-
-    device = 0 if torch.cuda.is_available() else -1  # Use GPU if available, otherwise CPU
-    grammar_corrector = pipeline("text2text-generation", model="t5-large", device=device)
-
-    # Simulate progress for grammar correction
-    update_status("Correcting grammar...")
-    prompt = f"Correct the grammar: {text}"
-    corrected = grammar_corrector(prompt, max_length=len(text) + 50, min_length = len(text)-10, do_sample=False)
-
-    final_corrected_text = corrected[0]['generated_text']
-    
-    # Simulate grammar correction progress with a loop
-    for i in range(100):
-        progress_bar['value'] = i + 1
-        root.update_idletasks()
-        root.after(10)  # Wait a bit to show progress
-
-    update_status("Grammar correction complete.")
-    display_corrected_text()
-
-def display_corrected_text():
-    global final_corrected_text
-    # Show corrected text only if it's 20 words or fewer
-    if len(final_corrected_text.split()) <= 20:
-        corrected_text_label.config(text=f"Corrected Text: {final_corrected_text}")
-    else:
-        corrected_text_label.config(text="Corrected text is too long to display.")
-    
-    export_button.config(state=tk.NORMAL)  # Enable export button after correction is done
-    reset_button.config(state=tk.NORMAL)  # Enable reset button
-
 def export_text():
-    if final_corrected_text:
+    global transcribed_text  # Now export transcribed_text
+    if transcribed_text:
         file_dir = os.path.dirname(selected_file)
         file_name = os.path.splitext(os.path.basename(selected_file))[0]
-        export_path = os.path.join(file_dir, f"{file_name}_corrected.txt")
+        export_path = os.path.join(file_dir, f"{file_name}_transcribed.txt")
         
         with open(export_path, "w") as f:
-            f.write(final_corrected_text)
+            f.write(transcribed_text)
         
-        messagebox.showinfo("Success", f"Corrected text exported successfully to {export_path}")
+        messagebox.showinfo("Success", f"Transcribed text exported successfully to {export_path}")
     else:
-        messagebox.showerror("Error", "No corrected text available to export.")
+        messagebox.showerror("Error", "No transcribed text available to export.")
 
 def reset_program():
-    global selected_file, final_corrected_text
+    global selected_file, transcribed_text
     # Reset global variables
     selected_file = None
-    final_corrected_text = None
+    transcribed_text = None
 
     # Reset GUI components
     file_label.config(text="No file selected")
     transcribed_text_label.config(text="Transcribed text will appear here")
-    corrected_text_label.config(text="Corrected text will appear here")
     status_label.config(text="Status: Idle")
     progress_bar['value'] = 0  # Reset progress bar
 
@@ -139,7 +99,7 @@ def update_status(message):
 
 # Create the main application window
 root = tk.Tk()
-root.title("Audio Transcription and Grammar Correction")
+root.title("Audio Transcription")
 root.geometry("600x450")
 
 # Set a custom window icon
@@ -153,7 +113,7 @@ browse_button.pack(pady=10)
 file_label = tk.Label(root, text="No file selected")
 file_label.pack(pady=5)
 
-transcribe_button = tk.Button(root, text="Transcribe and Correct", command=transcribe_and_correct)
+transcribe_button = tk.Button(root, text="Transcribe", command=transcribe_and_correct)
 transcribe_button.pack(pady=10)
 transcribe_button.config(state=tk.DISABLED)  # Disable until file is selected
 
@@ -166,12 +126,9 @@ progress_bar.pack(pady=10)
 transcribed_text_label = tk.Label(root, text="Transcribed text will appear here")
 transcribed_text_label.pack(pady=10)
 
-corrected_text_label = tk.Label(root, text="Corrected text will appear here")
-corrected_text_label.pack(pady=10)
-
-export_button = tk.Button(root, text="Export Corrected Text", command=export_text)
+export_button = tk.Button(root, text="Export Transcribed Text", command=export_text)
 export_button.pack(pady=10)
-export_button.config(state=tk.DISABLED)  # Disable until correction is complete
+export_button.config(state=tk.DISABLED)  # Disable until transcription is complete
 
 reset_button = tk.Button(root, text="Reset", command=reset_program)
 reset_button.pack(pady=10)
