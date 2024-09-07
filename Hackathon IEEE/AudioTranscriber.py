@@ -1,31 +1,39 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
+from tkinter import ttk  # Import ttk for the progress bar
 import speech_recognition as sr
 from pydub import AudioSegment
 import os
 import threading
-from PIL import Image, ImageTk
 from transformers import pipeline
-import time
 import torch
-import math
 
 # Global variables
 selected_file = None
 final_corrected_text = None
 
+# GUI functions
 def browse_file():
-    filepath = filedialog.askopenfilename(
-        title="Select an Audio File", 
-        filetypes=[("Audio Files", "*.mp3 *.wav *.flac *.ogg *.m4a *.aac")]
-    )
+    global selected_file
+    filepath = filedialog.askopenfilename(filetypes=[("Audio Files", "*.wav *.mp3 *.flac")])
     if filepath:
-        file_label.config(text=f"Selected File: {os.path.basename(filepath)}")
-        convert_button.config(state=tk.NORMAL)
-        global selected_file
         selected_file = filepath
+        file_label.config(text=f"Selected File: {os.path.basename(filepath)}")
+        transcribe_button.config(state=tk.NORMAL)  # Enable the transcribe button once a file is selected
+    else:
+        file_label.config(text="No file selected")
 
-def transcribe_and_correct(filepath):
+def transcribe_and_correct():
+    global selected_file
+    if selected_file:
+        transcribe_button.config(state=tk.DISABLED)  # Disable the transcribe button while processing
+        status_label.config(text="Transcribing...")
+        progress_bar['value'] = 0  # Reset the progress bar
+        threading.Thread(target=lambda: transcribe_audio(selected_file)).start()
+    else:
+        messagebox.showerror("Error", "Please select a file before transcribing.")
+
+def transcribe_audio(filepath):
     temp_wav_file = None
     # Convert to wav if needed
     if not filepath.endswith(".wav"):
@@ -40,6 +48,7 @@ def transcribe_and_correct(filepath):
 
     recognizer = sr.Recognizer()
     full_transcription = []
+    total_chunks = len(chunks)
 
     for i, chunk in enumerate(chunks):
         chunk_filename = f"chunk{i}.wav"
@@ -51,8 +60,7 @@ def transcribe_and_correct(filepath):
         try:
             text = recognizer.recognize_google(audio_data)
             full_transcription.append(text)
-            update_progress(i + 1, len(chunks), "Transcribing")  # Update the progress bar
-            result_label.config(text=f"Transcribing chunk {i+1}/{len(chunks)}")
+            update_status(f"Transcribing chunk {i+1}/{total_chunks}...")
         except sr.UnknownValueError:
             full_transcription.append("[Unintelligible]")
         except sr.RequestError as e:
@@ -60,28 +68,30 @@ def transcribe_and_correct(filepath):
         
         os.remove(chunk_filename)
 
+        # Update progress bar for transcription
+        progress_bar['value'] = ((i + 1) / total_chunks) * 100
+        root.update_idletasks()
+
     transcribed_text = ' '.join(full_transcription)
 
-    # If the transcribed text is fewer than 20 words, display it, otherwise hide it.
+    # Show transcribed text only if it's 20 words or fewer
     if len(transcribed_text.split()) <= 20:
-        result_label.config(text=f"Transcribed Text: {transcribed_text}")
+        transcribed_text_label.config(text=f"Transcribed Text: {transcribed_text}")
     else:
-        result_label.config(text="Transcribed text is too long to display.")
+        transcribed_text_label.config(text="Transcribed text is too long to display.")
+
+    update_status("Transcription complete. Correcting grammar...")
     
-    # Reset progress bar and prepare for grammar correction
+    # Reset progress bar for grammar correction
     progress_bar['value'] = 0
-    progress_label.config(text="Correcting grammar...")
+    root.update_idletasks()
 
     correct_grammar(transcribed_text)
 
     if temp_wav_file and os.path.exists(temp_wav_file):
         os.remove(temp_wav_file)
 
-    hide_loading()
-
-
 def correct_grammar(text):
-    global final_corrected_text
     # Start a new thread for grammar correction
     threading.Thread(target=lambda: grammar_correction_task(text)).start()
 
@@ -89,58 +99,33 @@ def grammar_correction_task(text):
     global final_corrected_text
 
     device = 0 if torch.cuda.is_available() else -1  # Use GPU if available, otherwise CPU
-    grammar_corrector = pipeline("text2text-generation", model="facebook/bart-large", device=device)
+    grammar_corrector = pipeline("text2text-generation", model="t5-large", device=device)
 
-    # Simulate progress bar for grammar correction
-    total_steps = 100
-    for i in range(total_steps + 1):
-        time.sleep(0.05)  # Simulate time delay for progress
-        root.after(0, update_ui_progress, i)  # Update progress safely from the main thread
-
-    # Perform grammar correction
+    # Simulate progress for grammar correction
+    update_status("Correcting grammar...")
     corrected = grammar_corrector(f"fix grammar: {text}", max_length=len(text), do_sample=False)
+
     final_corrected_text = corrected[0]['generated_text']
+    
+    # Simulate grammar correction progress with a loop
+    for i in range(100):
+        progress_bar['value'] = i + 1
+        root.update_idletasks()
+        root.after(10)  # Wait a bit to show progress
 
-    # Display the corrected text
-    root.after(0, display_corrected_text)  # Safely update UI from main thread
-
-def update_ui_progress(i):
-    progress_bar['value'] = i
-    progress_label.config(text=f"Grammar correction in progress: {i}%")
-    root.update_idletasks()
+    update_status("Grammar correction complete.")
+    display_corrected_text()
 
 def display_corrected_text():
+    global final_corrected_text
+    # Show corrected text only if it's 20 words or fewer
     if len(final_corrected_text.split()) <= 20:
-        result_label.config(text=f"Corrected Text: {final_corrected_text}")
+        corrected_text_label.config(text=f"Corrected Text: {final_corrected_text}")
     else:
-        result_label.config(text="Corrected text is too long to display.")
-    export_button.config(state=tk.NORMAL)
-
-def start_transcription_and_correction():
-    if selected_file:
-        convert_button.config(state=tk.DISABLED)  # Disable the button during processing
-        show_loading()
-        threading.Thread(target=lambda: transcribe_and_correct(selected_file)).start()
-    else:
-        messagebox.showerror("Error", "Please select an audio file first.")
-
-def show_loading():
-    loading_label.pack(pady=10)
-    progress_bar.pack(pady=10)
-    progress_label.pack(pady=5)
-    root.update_idletasks()
-
-def hide_loading():
-    loading_label.pack_forget()
-    progress_bar.pack_forget()
-    progress_label.pack_forget()
-    root.update_idletasks()
-
-def update_progress(chunk_number, total_chunks, phase):
-    progress_value = (chunk_number / total_chunks) * 100
-    progress_bar['value'] = progress_value
-    progress_label.config(text=f"{phase}... {int(progress_value)}%")
-    root.update_idletasks()
+        corrected_text_label.config(text="Corrected text is too long to display.")
+    
+    export_button.config(state=tk.NORMAL)  # Enable export button after correction is done
+    reset_button.config(state=tk.NORMAL)  # Enable reset button
 
 def export_text():
     if final_corrected_text:
@@ -156,55 +141,65 @@ def export_text():
         messagebox.showerror("Error", "No corrected text available to export.")
 
 def reset_program():
-    # Reset all UI elements and global variables
-    file_label.config(text="No file selected")
-    result_label.config(text="")
-    progress_label.config(text="")
-    progress_bar['value'] = 0
-    convert_button.config(state=tk.DISABLED)
-    export_button.config(state=tk.DISABLED)
-    
     global selected_file, final_corrected_text
+    # Reset global variables
     selected_file = None
     final_corrected_text = None
 
-# Create GUI window
+    # Reset GUI components
+    file_label.config(text="No file selected")
+    transcribed_text_label.config(text="Transcribed text will appear here")
+    corrected_text_label.config(text="Corrected text will appear here")
+    status_label.config(text="Status: Idle")
+    progress_bar['value'] = 0  # Reset progress bar
+
+    # Disable buttons that should only be active at specific stages
+    transcribe_button.config(state=tk.DISABLED)
+    export_button.config(state=tk.DISABLED)
+    reset_button.config(state=tk.DISABLED)
+
+def update_status(message):
+    status_label.config(text=message)
+
+# Create the main application window
 root = tk.Tk()
-root.title("Audio Transcription with Grammar Correction")
-root.geometry("400x600")
-root.resizable(False, False)
+root.title("Audio Transcription and Grammar Correction")
+root.geometry("600x450")
 
-# Load and resize logo image (if available)
-try:
-    logo_image = Image.open("logo.png")
-    logo_image = logo_image.resize((100, 100), Image.Resampling.LANCZOS)
-    logo_photo = ImageTk.PhotoImage(logo_image)
-    root.iconphoto(False, logo_photo)
-except FileNotFoundError:
-    print("Logo image not found, skipping logo setup.")
+# Set a custom window icon
+logo_path = "logo.ico"  # Replace this with the actual path to your .ico logo file
+root.iconbitmap(logo_path)
 
-browse_button = tk.Button(root, text="Browse Audio File", command=browse_file, bg="#4CAF50", fg="white", font=("Arial", 12), width=20)
-browse_button.pack(pady=20)
+# Create and position widgets
+browse_button = tk.Button(root, text="Browse Audio File", command=browse_file)
+browse_button.pack(pady=10)
 
-file_label = tk.Label(root, text="No file selected", font=("Arial", 10), fg="blue")
+file_label = tk.Label(root, text="No file selected")
 file_label.pack(pady=5)
 
-convert_button = tk.Button(root, text="Transcribe and Correct", command=start_transcription_and_correction, bg="#2196F3", fg="white", font=("Arial", 12), width=20)
-convert_button.pack(pady=20)
-convert_button.config(state=tk.DISABLED)
+transcribe_button = tk.Button(root, text="Transcribe and Correct", command=transcribe_and_correct)
+transcribe_button.pack(pady=10)
+transcribe_button.config(state=tk.DISABLED)  # Disable until file is selected
 
-loading_label = tk.Label(root, text="Processing, please wait...", font=("Arial", 10), fg="orange")
-progress_bar = ttk.Progressbar(root, mode="determinate", length=300)
-progress_label = tk.Label(root, text="")  # Label for showing detailed progress
+status_label = tk.Label(root, text="Status: Idle")
+status_label.pack(pady=5)
 
-result_label = tk.Label(root, text="", wraplength=350, font=("Arial", 10), fg="green")
-result_label.pack(pady=20)
+progress_bar = ttk.Progressbar(root, orient="horizontal", length=400, mode="determinate")
+progress_bar.pack(pady=10)
 
-export_button = tk.Button(root, text="Export Corrected Text", command=export_text, bg="#FF5722", fg="white", font=("Arial", 12), width=20)
-export_button.pack(pady=20)
-export_button.config(state=tk.DISABLED)
+transcribed_text_label = tk.Label(root, text="Transcribed text will appear here")
+transcribed_text_label.pack(pady=10)
 
-reset_button = tk.Button(root, text="Reset Program", command=reset_program, bg="#F44336", fg="white", font=("Arial", 12), width=20)
-reset_button.pack(pady=20)
+corrected_text_label = tk.Label(root, text="Corrected text will appear here")
+corrected_text_label.pack(pady=10)
 
+export_button = tk.Button(root, text="Export Corrected Text", command=export_text)
+export_button.pack(pady=10)
+export_button.config(state=tk.DISABLED)  # Disable until correction is complete
+
+reset_button = tk.Button(root, text="Reset", command=reset_program)
+reset_button.pack(pady=10)
+reset_button.config(state=tk.DISABLED)  # Disable until needed
+
+# Start the Tkinter event loop
 root.mainloop()
