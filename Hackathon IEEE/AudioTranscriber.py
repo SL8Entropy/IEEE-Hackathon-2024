@@ -5,8 +5,8 @@ import whisper
 import os
 import threading
 import torch
-from pydub import AudioSegment  # Import AudioSegment
-
+from pydub import AudioSegment
+from transformers import pipeline  # Import pipeline
 # Global variables
 selected_file = None
 final_corrected_text = None
