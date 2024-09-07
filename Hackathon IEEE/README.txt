@@ -1,103 +1,63 @@
+I can provide the content directly here, and you can create the file on your computer.
 
-# Audio Transcription and Summarization GUI
+1. Copy the following content:
 
-This Python project provides a graphical user interface (GUI) for selecting an audio file, transcribing its speech to text, summarizing the transcription, and exporting the summarized text as a `.txt` file. It supports various audio formats, including MP3, WAV, FLAC, OGG, and more.
+```plaintext
+# Audio Transcription and Grammar Correction
+
+## Overview
+This application provides a graphical user interface (GUI) for transcribing audio files and correcting the grammar of the transcribed text. It utilizes OpenAI's Whisper model for accurate audio transcription and a T5 model for grammar correction.
 
 ## Features
+- **Browse for Audio Files**: Select audio files in formats such as WAV, MP3, or FLAC.
+- **Transcription**: Convert audio to text using the Whisper model.
+- **Grammar Correction**: Improve the grammar of the transcribed text using a T5 model.
+- **Progress Monitoring**: View the status and progress of transcription and grammar correction.
+- **Export**: Save the corrected text to a text file.
+- **Reset**: Clear the current session and reset the application.
 
-- **Browse and select audio files**: Supports MP3, WAV, FLAC, OGG, M4A, and AAC formats.
-- **Transcription**: Uses the Google Web Speech API to transcribe audio to text.
-- **Summarization**: Uses the Hugging Face `transformers` library with GPU support (if available) to summarize the transcribed text.
-- **Progress Tracking**: Displays progress bars for both transcription and summarization.
-- **GPU Support**: Automatically uses GPU (if available) for faster summarization.
-- **Export Summarized Text**: Exports the summarized text to a `.txt` file in the same directory as the input audio.
-- **Custom Logo**: Displays a custom logo in the GUI and the window title bar.
+## Requirements
+- Python 3.7 or higher
+- Libraries: `tkinter`, `openai-whisper`, `pydub`, `torch`, `transformers`
+- Whisper model: Automatically downloaded when using the Whisper library
+- T5 model: Automatically downloaded when using the Transformers library
 
 ## Installation
+1. **Clone or Download the Repository**: Obtain the source code from the repository.
+2. **Install Dependencies**: Run the following command to install the required libraries:
+   ```bash
+   pip install tkinter openai-whisper pydub torch transformers
+   ```
+3. **Prepare the Environment**: Ensure you have the necessary audio processing tools and libraries.
 
-### Prerequisites
+## Usage
+1. **Run the Application**: Execute the script to start the GUI:
+   ```bash
+   python your_script_name.py
+   ```
+2. **Browse for Audio File**: Click the "Browse Audio File" button and select an audio file.
+3. **Transcribe and Correct**: Click the "Transcribe and Correct" button to process the audio.
+4. **Export Corrected Text**: After grammar correction is complete, click the "Export Corrected Text" button to save the corrected text.
+5. **Reset**: Use the "Reset" button to clear the current session and prepare for a new file.
 
-- Python 3.x
-- [Pillow](https://pillow.readthedocs.io/en/stable/) library (for handling images in the GUI)
-- [Pydub](https://github.com/jiaaro/pydub) (for audio format conversion)
-- [SpeechRecognition](https://pypi.org/project/SpeechRecognition/) (for transcribing audio to text)
-- [transformers](https://huggingface.co/transformers/) (for text summarization)
-- [torch](https://pytorch.org/) (to enable GPU support)
-
-### Install Dependencies
-
-1. Install the required libraries by running:
-
-    ```bash
-    pip install pillow pydub SpeechRecognition transformers torch
-    ```
-
-2. You also need to install `ffmpeg` for the `pydub` library to handle audio format conversions. Download it [here](https://ffmpeg.org/download.html) and follow the installation instructions. Ensure `ffmpeg` is added to your system's PATH.
-
-### Usage
-
-1. **Clone or download the project:**
-
-    ```bash
-    git clone https://github.com/your-username/audio-transcription-gui.git
-    cd audio-transcription-gui
-    ```
-
-2. **Prepare your logo:**
-
-    - Place your logo image file (e.g., `logo.png`) in the project directory. The logo should be in `.png` format.
-    - The logo will be displayed at the top of the GUI and set as the window’s title bar icon.
-
-3. **Run the GUI:**
-
-    In the project directory, run the main Python script:
-
-    ```bash
-    python AudioTranscriber.py
-    ```
-
-4. **Select an audio file:**
-
-    - Click on the "Browse Audio File" button to choose an audio file from your system.
-    - Supported formats include `.mp3`, `.wav`, `.flac`, `.ogg`, `.m4a`, and `.aac`.
-
-5. **Transcribe and summarize the audio:**
-
-    - After selecting an audio file, the "Transcribe and Summarize" button will become enabled.
-    - Click this button to start the transcription and summarization process.
-    - A loading screen will appear with progress bars showing the progress of both the transcription and summarization.
-
-6. **View and export summarized text:**
-
-    - Once the transcription and summarization are complete, the summarized text will be displayed in the GUI.
-    - The "Export Summarized Text" button will be enabled, allowing you to export the summarized text as a `.txt` file in the same directory as the audio file.
-
-## Files and Directories
-
-- **logo.png**: The logo of the app.
-- **AudioTranscriber.py**: The main Python script that runs the GUI.
+## Notes
+- Ensure that the Whisper model and T5 model files are properly downloaded and available.
+- The application provides progress updates during processing, and text display is limited to 20 words for brevity.
 
 ## Troubleshooting
-
-- **Error: `ffmpeg` not found**: Ensure that `ffmpeg` is installed on your system and added to your PATH.
-- **Pillow error with image resizing**: Ensure you are using a recent version of Pillow where the `Image.Resampling.LANCZOS` is available for resizing images.
-- **CUDA/GPU not used**: Ensure that PyTorch detects your GPU. Run the following in Python to verify GPU availability:
-
-    ```python
-    import torch
-    print(torch.cuda.is_available())
-    ```
-
-    This should return `True` if a GPU is available.
+- **Error in Loading Models**: Verify that you have a stable internet connection for downloading models.
+- **Audio File Issues**: Ensure that the audio file is in a supported format and not corrupted.
+- **Performance**: For faster processing, use a machine with GPU support.
 
 ## License
+This project is licensed under the MIT License. See the LICENSE file for more details.
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+## Contact
+For any issues or inquiries, please contact [Your Email Address] or create an issue on the repository page.
+```
 
----
+2. Open a text editor on your computer (e.g., Notepad on Windows, TextEdit on macOS).
+3. Paste the copied content into the text editor.
+4. Save the file with the name `README.txt`.
 
-### Key Updates:
-- Added **summarization** of transcribed text using Hugging Face Transformers (`t5-small` model).
-- **GPU support**: If a GPU is available, it will be automatically used for faster summarization.
-- Enhanced **progress bars** for transcription and summarization, improving user experience.
-- Simplified **export functionality** to save only the summarized text.
+If you have any trouble creating the file, let me know, and I can assist further!

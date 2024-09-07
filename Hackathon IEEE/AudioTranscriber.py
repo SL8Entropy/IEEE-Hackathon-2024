@@ -1,11 +1,9 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from tkinter import ttk  # Import ttk for the progress bar
-import speech_recognition as sr
-from pydub import AudioSegment
+from tkinter import ttk
+import whisper
 import os
 import threading
-from transformers import pipeline
 import torch
 
 # Global variables
@@ -42,44 +40,20 @@ def transcribe_audio(filepath):
         audio.export(temp_wav_file, format="wav")
         filepath = temp_wav_file
 
-    audio = AudioSegment.from_wav(filepath)
-    chunk_length_ms = 60000
-    chunks = [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
-
-    recognizer = sr.Recognizer()
-    full_transcription = []
-    total_chunks = len(chunks)
-
-    for i, chunk in enumerate(chunks):
-        chunk_filename = f"chunk{i}.wav"
-        chunk.export(chunk_filename, format="wav")
-
-        with sr.AudioFile(chunk_filename) as source:
-            audio_data = recognizer.record(source)
-
-        try:
-            text = recognizer.recognize_google(audio_data)
-            full_transcription.append(text)
-            update_status(f"Transcribing chunk {i+1}/{total_chunks}...")
-        except sr.UnknownValueError:
-            full_transcription.append("[Unintelligible]")
-        except sr.RequestError as e:
-            full_transcription.append(f"[Error: {e}]")
-        
-        os.remove(chunk_filename)
-
-        # Update progress bar for transcription
-        progress_bar['value'] = ((i + 1) / total_chunks) * 100
-        root.update_idletasks()
-
-    transcribed_text = ' '.join(full_transcription)
+    # Initialize Whisper model
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model = whisper.load_model("base", device=device)
+    
+    # Transcribe audio
+    transcription = model.transcribe(filepath)
+    transcribed_text = transcription['text']
 
     # Show transcribed text only if it's 20 words or fewer
     if len(transcribed_text.split()) <= 20:
         transcribed_text_label.config(text=f"Transcribed Text: {transcribed_text}")
     else:
         transcribed_text_label.config(text="Transcribed text is too long to display.")
-
+    print(transcribed_text)
     update_status("Transcription complete. Correcting grammar...")
     
     # Reset progress bar for grammar correction
@@ -103,7 +77,8 @@ def grammar_correction_task(text):
 
     # Simulate progress for grammar correction
     update_status("Correcting grammar...")
-    corrected = grammar_corrector(f"fix grammar: {text}", max_length=len(text), do_sample=False)
+    prompt = f"Correct the grammar and fix corrupted the text. It is a highly corrupted college lecture transcription: {text}"
+    corrected = grammar_corrector(prompt, max_length=len(text) + 50, do_sample=False)
 
     final_corrected_text = corrected[0]['generated_text']
     
